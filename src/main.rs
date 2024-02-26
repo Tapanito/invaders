@@ -1,4 +1,4 @@
-use std::{error::Error, fs, io, sync::mpsc, thread, time::Duration};
+use std::{borrow::BorrowMut, error::Error, fs, io, sync::mpsc, thread, time::Duration};
 
 use crossterm::{
     cursor::{Hide, Show},
@@ -7,8 +7,11 @@ use crossterm::{
     ExecutableCommand,
 };
 use invaders::{
-    frame::Frame,
+    bullet::{self, Bullet},
+    frame::{Drawable, Frame},
+    player::{self, Player},
     render::{self, render},
+    NUM_COLS, NUM_ROWS,
 };
 use rusty_audio::Audio;
 
@@ -42,21 +45,41 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     });
 
+    let mut player = Player::new((NUM_COLS / 2) as i32, (NUM_ROWS - 1) as i32);
+    let mut bullets: Vec<Bullet> = Vec::new();
     'gameloop: loop {
-        let curr_frame = Frame::new();
+        let mut curr_frame = Frame::new();
 
         while event::poll(Duration::default())? {
             if let Event::Key(key_event) = event::read()? {
                 match key_event.code {
                     KeyCode::Esc | KeyCode::Char('q') => break 'gameloop,
+                    KeyCode::Left => {
+                        if curr_frame.all_in_frame(player.try_move(-1)) {
+                            player.apply_move(-1)
+                        }
+                    }
+                    KeyCode::Right => {
+                        if curr_frame.all_in_frame(player.try_move(1)) {
+                            player.apply_move(1)
+                        }
+                    }
+                    KeyCode::Enter => bullets.push(player.fire()),
                     _ => {}
                 }
             }
         }
 
+        curr_frame.draw(&player);
+        bullets.retain(|f| curr_frame.all_in_frame(f.try_move(1)));
+        bullets.iter_mut().for_each(|f| {
+            f.apply_move(1);
+            curr_frame.draw(f)
+        });
+
         // Draw and render
         let _ = render_tx.send(curr_frame);
-        thread::sleep(Duration::from_millis(1));
+        thread::sleep(Duration::from_millis(50));
     }
 
     drop(render_tx);

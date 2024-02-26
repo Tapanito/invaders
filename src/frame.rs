@@ -1,8 +1,11 @@
-use std::{ops::Index, path::Iter};
-
 use crate::{EMPTY_CELL, NUM_COLS, NUM_ROWS};
+use std::{
+    error::Error,
+    ops::{Index, IndexMut},
+};
 
 type Row = Vec<&'static str>;
+
 pub struct Frame(Vec<Row>);
 
 impl Frame {
@@ -30,9 +33,19 @@ impl Frame {
     pub fn num_rows(&self) -> usize {
         self.0[0].len()
     }
+
+    pub fn draw<T: Drawable>(&mut self, drawable: &T) {
+        drawable.values().iter().for_each(|f| self[f.0][f.1] = f.2);
+    }
+
+    pub fn all_in_frame(&self, positions: Vec<(i32, i32)>) -> bool {
+        positions
+            .iter()
+            .all(|f| (f.0 as usize) < self.num_cols() && (f.1 as usize) < self.num_rows())
+    }
 }
 
-impl <'a> IntoIterator for &'a Frame {
+impl<'a> IntoIterator for &'a Frame {
     type Item = (usize, usize, &'static str);
     type IntoIter = FrameIterator<'a>;
 
@@ -53,13 +66,18 @@ impl Index<usize> for Frame {
     }
 }
 
+impl IndexMut<usize> for Frame {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        IndexMut::index_mut(&mut self.0, index)
+    }
+}
 pub struct FrameIterator<'a> {
     frame: &'a Frame,
     col_index: usize,
     row_index: usize,
 }
 
-impl <'a> Iterator for FrameIterator<'a> {
+impl<'a> Iterator for FrameIterator<'a> {
     type Item = (usize, usize, &'static str);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -84,7 +102,7 @@ impl <'a> Iterator for FrameIterator<'a> {
 }
 
 pub trait Drawable {
-    fn draw(&self, frame: &mut Frame);
+    fn values(&self) -> Vec<(usize, usize, &'static str)>;
 }
 
 #[cfg(test)]
